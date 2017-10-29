@@ -5,6 +5,7 @@
 
 BEGIN{
 
+  secret();
   # for JSONPATH from lib/JSON_include.awk
   JSONPATH["INIT"] = "INIT"; BRIEF=1; STREAM=1;
   FS="|";
@@ -53,7 +54,7 @@ BEGIN{
     RS="\x04";
     cmd | getline newobs;
     close(cmd); RS="\n";
-  
+
     parse_json(newobs);
     newid = JSONPATH[0,"\"id\""];
     print "  New Obs id: " newid >> "upload.log";  close("upload.log");
