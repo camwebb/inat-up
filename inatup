@@ -5,6 +5,9 @@
 
 BEGIN{
 
+  # Add common text for description here (no line breaks):
+  DESC = "Plant observed in field, photographed, and collected by one or more of T. Yahara, S. Tagane, H. Toyama. Field determination by S. Tagane.";
+  
   secret();
   # for JSONPATH from lib/JSON_include.awk
   JSONPATH["INIT"] = "INIT"; BRIEF=1; STREAM=1;
@@ -16,7 +19,7 @@ BEGIN{
     print "Coll: " $1 >> "upload.log"; close("upload.log");
 
     # Check for the name in iNat
-    taxon = $7;
+    taxon = $6;
     # clean
     gsub(/^\ +/,"",taxon); gsub(/\ +$/,"",taxon);
     gsub(/\ +/," ",taxon); 
@@ -37,19 +40,35 @@ BEGIN{
       taxoninfo = "--data-urlencode 'observation[taxon_id]=" testtaxonid "'";
     }
     else {
-      print "  Taxon not found";
+      print "  Taxon not found" >> "upload.log";  close("upload.log");
       taxoninfo = "--data-urlencode 'observation[species_guess]=" taxon "'";
     }
+
+    # Elements of data
+    date = longlat = elev = collcode = "";
+    fields = 0;
+    if ($2) {
+      date = " --data-urlencode 'observation[observed_on_string]=" $2 "'" \
+        " --data-urlencode 'observation[time_zone]=Osaka'";
+    }
+    if (($3) && ($4)) {
+      longlat = " --data-urlencode 'observation[latitude]=" $3 \
+        "' --data-urlencode 'observation[longitude]=" $4 \
+        "' --data-urlencode 'observation[positional_accuracy]=50'";
+      # default accuracy
+    }
+    if ($5) {
+      elev = " --data-urlencode 'observation[observation_field_values_attributes][" fields "][observation_field_id]=7588' --data-urlencode 'observation[observation_field_values_attributes][" fields++ "][value]=" $5 "'" ;
+    }
+    if ($1) {
+      collcode = " --data-urlencode 'observation[observation_field_values_attributes][" fields "][observation_field_id]=7584' --data-urlencode 'observation[observation_field_values_attributes][" fields++ "][value]=" $1 "'" ;
+      DESC = DESC " Collection code: " $1 ".";
+    }
+    desc = " --data-urlencode 'observation[description]=" DESC "'" ;
     
     cmd = "curl -s -H 'Authorization: Bearer " AUTHTOKEN "' "   \
-      taxoninfo                                                 \
-      " --data-urlencode 'observation[observed_on_string]=" $2 \
-      "' --data-urlencode 'observation[time_zone]=" $3 \
-      "' --data-urlencode 'observation[latitude]=" $4  \
-      "' --data-urlencode 'observation[longitude]=" $5  \
-      "' --data-urlencode 'observation[positional_accuracy]=" $6 \
-      "' --data-urlencode 'observation[observation_field_values_attributes][0][observation_field_id]=7256' --data-urlencode 'observation[observation_field_values_attributes][0][value]=" $1 "' " \
-      "https://www.inaturalist.org/observations.json";
+      taxoninfo date longlat elev collcode desc \
+      " https://www.inaturalist.org/observations.json";
     # print cmd >> "/dev/stderr";
     RS="\x04";
     cmd | getline newobs;
@@ -57,7 +76,10 @@ BEGIN{
 
     parse_json(newobs);
     newid = JSONPATH[0,"\"id\""];
-    print "  New Obs id: " newid >> "upload.log";  close("upload.log");
+    place = JSONPATH[0,"\"place_guess\""];
+    print "  New Obs id: " newid >> "upload.log";
+    # for checking long/lat:
+    print "  Place: " place >> "upload.log";  close("upload.log");
 
     # Photos
     # How many?

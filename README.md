@@ -33,3 +33,21 @@ You will get back some JSON:
        }
 
 This `AUTH_TOKEN` can be used for a while (weeks?) to make calls to the API. 
+
+## Using `dwc:` fields
+
+Find the available darwin core fields with this:
+
+      curl https://www.inaturalist.org/observation_fields.json?q=dwc
+
+Fields and their iNat id:
+
+      dwc:basisOfRecord     7586
+      dwc:collectionCode    7584
+      dwc:locality          7587
+      dwc:occurrenceID      7261
+      dwc:organismID        6934
+      dwc:recordedBy        7262
+      dwc:recordNumber      7256
+      dwc:verbatimElevation 7588
+      
