@@ -1,0 +1,79 @@
+#!/usr/bin/gawk -f
+
+@include "lib/JSON_include.awk"
+@include "lib/secret.awk"   # for your AUTHTOKEN
+
+BEGIN{
+
+  # for JSONPATH from lib/JSON_include.awk
+  JSONPATH["INIT"] = "INIT"; BRIEF=1; STREAM=1;
+  FS="|";
+
+  # for each collection/observation
+  while ((getline < "newobs.csv") > 0) {
+
+    print "Coll: " $1 >> "upload.log"; close("upload.log");
+
+    # Check for the name in iNat
+    taxon = $7;
+    # clean
+    gsub(/^\ +/,"",taxon); gsub(/\ +$/,"",taxon);
+    gsub(/\ +/," ",taxon); 
+    print "  Taxon: " taxon >> "upload.log" ;  close("upload.log");
+
+    cmd = "curl -s -X GET --header 'Accept: application/json' 'http://api.inaturalist.org/v1/taxa/autocomplete?q=" gensub(/\ +/,"+","G", taxon) "'";
+    RS="\x04";
+    cmd | getline newobs;
+    close(cmd); RS="\n";
+    
+    parse_json(newobs);
+    testtaxon = gensub(/"/,"","G", JSONPATH["\"results\"",0,"\"name\""]);
+    testrank = gensub(/"/,"","G", JSONPATH["\"results\"",0,"\"rank\""]);
+    testtaxonid = gensub(/"/,"","G", JSONPATH["\"results\"",0,"\"id\""]);
+    if (taxon == testtaxon) {
+      print "  Taxon found: " testtaxon "; rank: " testrank"; ID: : "   \
+        testtaxonid >> "upload.log";  close("upload.log");
+      taxoninfo = "--data-urlencode 'observation[taxon_id]=" testtaxonid "'";
+    }
+    else {
+      print "  Taxon not found";
+      taxoninfo = "--data-urlencode 'observation[species_guess]=" taxon "'";
+    }
+    
+    cmd = "curl -s -H 'Authorization: Bearer " AUTHTOKEN "' "   \
+      taxoninfo                                                 \
+      " --data-urlencode 'observation[observed_on_string]=" $2 \
+      "' --data-urlencode 'observation[time_zone]=" $3 \
+      "' --data-urlencode 'observation[latitude]=" $4  \
+      "' --data-urlencode 'observation[longitude]=" $5  \
+      "' --data-urlencode 'observation[positional_accuracy]=" $6 \
+      "' --data-urlencode 'observation[observation_field_values_attributes][0][observation_field_id]=7256' --data-urlencode 'observation[observation_field_values_attributes][0][value]=" $1 "' " \
+      "https://www.inaturalist.org/observations.json";
+    # print cmd >> "/dev/stderr";
+    RS="\x04";
+    cmd | getline newobs;
+    close(cmd); RS="\n";
+  
+    parse_json(newobs);
+    newid = JSONPATH[0,"\"id\""];
+    print "  New Obs id: " newid >> "upload.log";  close("upload.log");
+
+    # Photos
+    # How many?
+    cmd = "find img/" $1 " -type f";
+    RS="\x04";
+    cmd | getline files;
+    close(cmd); RS="\n";
+
+    nfiles = split(files, file, "\n");
+    for (i = 1 ; i < nfiles; i++) {
+      print "  Photo " i ": " file[i] >> "upload.log";  close("upload.log");
+      cmd = "curl -H \"Authorization: Bearer " AUTHTOKEN "\" -F \"observation_photo[observation_id]=" newid "\" -F \"file=@" file[i] "\" \"https://www.inaturalist.org/observation_photos\"";
+      RS="\x04";
+      cmd | getline newphoto;
+      close(cmd); RS="\n";
+
+      if (newphoto ~ /[Ee]rror/) print "    Photo error!" >> "upload.log";  close("upload.log");
+    }
+  }
+}

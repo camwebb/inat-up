@@ -1,0 +1,2 @@
+# Your APP AUTH TOKEN HERE:
+AUTHTOKEN="...";
