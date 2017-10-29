@@ -1,10 +1,11 @@
 #!/usr/bin/gawk -f
 
 @include "lib/JSON_include.awk"
+@include "lib/util.awk"
 @include "lib/secret.awk"   # for your AUTHTOKEN
 
 BEGIN{
-
+  
   # Add common text for description here (no line breaks):
   DESC = "Plant observed in field, photographed, and collected by one or more of T. Yahara, S. Tagane, H. Toyama. Field determination by S. Tagane.";
   
@@ -17,6 +18,7 @@ BEGIN{
   while ((getline < "newobs.csv") > 0) {
 
     print "Coll: " $1 >> "upload.log"; close("upload.log");
+    print "Coll: " $1 > "/dev/stderr"; close("/dev/stderr");
 
     # Check for the name in iNat
     taxon = $6;
@@ -24,13 +26,12 @@ BEGIN{
     gsub(/^\ +/,"",taxon); gsub(/\ +$/,"",taxon);
     gsub(/\ +/," ",taxon); 
     print "  Taxon: " taxon >> "upload.log" ;  close("upload.log");
+    print "  Querying taxon" > "/dev/stderr"; close("/dev/stderr");
 
-    cmd = "curl -s -X GET --header 'Accept: application/json' 'http://api.inaturalist.org/v1/taxa/autocomplete?q=" gensub(/\ +/,"+","G", taxon) "'";
-    RS="\x04";
-    cmd | getline newobs;
-    close(cmd); RS="\n";
+    parse_json(curl("GET", "Accept: application/json",  \
+                    "--data-urlencode 'q=" taxon "'",
+                    "http://api.inaturalist.org/v1/taxa/autocomplete" ));
     
-    parse_json(newobs);
     testtaxon = gensub(/"/,"","G", JSONPATH["\"results\"",0,"\"name\""]);
     testrank = gensub(/"/,"","G", JSONPATH["\"results\"",0,"\"rank\""]);
     testtaxonid = gensub(/"/,"","G", JSONPATH["\"results\"",0,"\"id\""]);
@@ -48,33 +49,31 @@ BEGIN{
     date = longlat = elev = collcode = "";
     fields = 0;
     if ($2) {
-      date = " --data-urlencode 'observation[observed_on_string]=" $2 "'" \
+      date = "--data-urlencode 'observation[observed_on_string]=" $2 "'" \
         " --data-urlencode 'observation[time_zone]=Osaka'";
     }
     if (($3) && ($4)) {
-      longlat = " --data-urlencode 'observation[latitude]=" $3 \
-        "' --data-urlencode 'observation[longitude]=" $4 \
+      longlat = "--data-urlencode 'observation[latitude]=" $3 \
+        "' --data-urlencode 'observation[longitude]=" $4            \
         "' --data-urlencode 'observation[positional_accuracy]=50'";
       # default accuracy
     }
     if ($5) {
-      elev = " --data-urlencode 'observation[observation_field_values_attributes][" fields "][observation_field_id]=7588' --data-urlencode 'observation[observation_field_values_attributes][" fields++ "][value]=" $5 "'" ;
+      elev = "--data-urlencode 'observation[observation_field_values_attributes][" fields "][observation_field_id]=7588' --data-urlencode 'observation[observation_field_values_attributes][" fields++ "][value]=" $5 "'" ;
     }
     if ($1) {
-      collcode = " --data-urlencode 'observation[observation_field_values_attributes][" fields "][observation_field_id]=7584' --data-urlencode 'observation[observation_field_values_attributes][" fields++ "][value]=" $1 "'" ;
+      collcode = "--data-urlencode 'observation[observation_field_values_attributes][" fields "][observation_field_id]=7584' --data-urlencode 'observation[observation_field_values_attributes][" fields++ "][value]=" $1 "'" ;
       DESC = DESC " Collection code: " $1 ".";
     }
-    desc = " --data-urlencode 'observation[description]=" DESC "'" ;
-    
-    cmd = "curl -s -H 'Authorization: Bearer " AUTHTOKEN "' "   \
-      taxoninfo date longlat elev collcode desc \
-      " https://www.inaturalist.org/observations.json";
-    # print cmd >> "/dev/stderr";
-    RS="\x04";
-    cmd | getline newobs;
-    close(cmd); RS="\n";
+    desc = "--data-urlencode 'observation[description]=" DESC "'" ;
 
-    parse_json(newobs);
+    print "  Making obs" > "/dev/stderr"; close("/dev/stderr");
+
+    parse_json(curl("POST", "Authorization: Bearer " AUTHTOKEN,         \
+                    (taxoninfo " " date " " longlat " " elev " " collcode \
+                     " " desc),                                             \
+                    "https://www.inaturalist.org/observations.json"));
+    
     newid = JSONPATH[0,"\"id\""];
     place = JSONPATH[0,"\"place_guess\""];
     print "  New Obs id: " newid >> "upload.log";
@@ -91,11 +90,13 @@ BEGIN{
     nfiles = split(files, file, "\n");
     for (i = 1 ; i < nfiles; i++) {
       print "  Photo " i ": " file[i] >> "upload.log";  close("upload.log");
-      cmd = "curl -H \"Authorization: Bearer " AUTHTOKEN "\" -F \"observation_photo[observation_id]=" newid "\" -F \"file=@" file[i] "\" \"https://www.inaturalist.org/observation_photos\"";
-      RS="\x04";
-      cmd | getline newphoto;
-      close(cmd); RS="\n";
+      print "  Uploading photo " i > "/dev/stderr"; close("/dev/stderr");
 
+      newphoto = curl("POST", "Authorization: Bearer " AUTHTOKEN,       \
+                      "-F 'observation_photo[observation_id]=" newid \
+                      "' -F 'file=@" file[i] "'",\
+                      "https://www.inaturalist.org/observation_photos");
+      
       if (newphoto ~ /[Ee]rror/) print "    Photo error!" >> "upload.log";  close("upload.log");
     }
   }
