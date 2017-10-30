@@ -7,71 +7,153 @@
 BEGIN{
   
   # Add common text for description here (no line breaks):
-  DESC = "Plant observed in field, photographed, and collected by one or more of T. Yahara, S. Tagane, H. Toyama. Field determination by S. Tagane.";
+  DESC = "Plant observed in field, photographed, and collected by one or more of T. Yahara, S. Tagane, H. Toyama, plus additional collectors in dwc:recordedBy field. Field determination by S. Tagane, unless specified in dwc:identifiedBy.";
   
   secret();
   # for JSONPATH from lib/JSON_include.awk
   JSONPATH["INIT"] = "INIT"; BRIEF=1; STREAM=1;
+  DEBUG = 0;
   FS="|";
 
-  # for each collection/observation
+  ## For each collection/observation
   while ((getline < "newobs.csv") > 0) {
+    # Re-init
+    taxon = taxoninfo = testtaxon = testrank = testtaxonid          \
+      = date = longlat = elev = collcode = idby = indiv = iddate        \
+      = loc = collectors = sciname = cmd = files = nfiles = newphoto \
+      = newid = place = "";
+    desc = DESC;
+    fields = 0;
 
+    if (!$1) {
+      print "Record w/o collcode. Skipping\n" >> "upload.log";
+      close("upload.log");
+      print "Record w/o collcode. Skipping" > "/dev/stderr";
+      close("/dev/stderr");
+      continue;
+    }
     print "Coll: " $1 >> "upload.log"; close("upload.log");
     print "Coll: " $1 > "/dev/stderr"; close("/dev/stderr");
 
+    # Test for photos
+    cmd = "find img/" $1 " -type f | sort";
+    RS="\x04";
+    cmd | getline files;
+    close(cmd); RS="\n";
+    
+    if (!files) {
+      print "  No directory of images. Skipping\n" >> "upload.log";
+      close("upload.log");
+      print "  No directory of images. Skipping" > "/dev/stderr";
+      close("/dev/stderr");
+      continue;
+    }
+    
     # Check for the name in iNat
     taxon = $6;
-    # clean
-    gsub(/^\ +/,"",taxon); gsub(/\ +$/,"",taxon);
-    gsub(/\ +/," ",taxon); 
-    print "  Taxon: " taxon >> "upload.log" ;  close("upload.log");
-    print "  Querying taxon" > "/dev/stderr"; close("/dev/stderr");
+    if (taxon) {
+      # clean
+      gsub(/^\ +/,"",taxon); gsub(/\ +$/,"",taxon);
+      gsub(/\ +/," ",taxon); 
+      print "  Taxon: " taxon >> "upload.log" ;  close("upload.log");
+      print "  Querying taxon" > "/dev/stderr"; close("/dev/stderr");
 
-    parse_json(curl("GET", "Accept: application/json",  \
-                    "--data-urlencode 'q=" taxon "'",
-                    "http://api.inaturalist.org/v1/taxa/autocomplete" ));
+      parse_json(curl("GET", "Accept: application/json",    \
+                      "--data-urlencode 'q=" taxon "'",
+                      "http://api.inaturalist.org/v1/taxa/autocomplete" ));
     
-    testtaxon = gensub(/"/,"","G", JSONPATH["\"results\"",0,"\"name\""]);
-    testrank = gensub(/"/,"","G", JSONPATH["\"results\"",0,"\"rank\""]);
-    testtaxonid = gensub(/"/,"","G", JSONPATH["\"results\"",0,"\"id\""]);
-    if (taxon == testtaxon) {
-      print "  Taxon found: " testtaxon "; rank: " testrank"; ID: : "   \
-        testtaxonid >> "upload.log";  close("upload.log");
-      taxoninfo = "--data-urlencode 'observation[taxon_id]=" testtaxonid "'";
+      testtaxon = gensub(/"/,"","G", JSONPATH["\"results\"",0,"\"name\""]);
+      testrank = gensub(/"/,"","G", JSONPATH["\"results\"",0,"\"rank\""]);
+      testtaxonid = gensub(/"/,"","G", JSONPATH["\"results\"",0,"\"id\""]);
+      if (taxon == testtaxon) {
+        print "  Taxon found: " testtaxon "; rank: " testrank"; ID: " \
+          testtaxonid >> "upload.log";  close("upload.log");
+        taxoninfo = "--data-urlencode 'observation[taxon_id]=" testtaxonid "'";
+      }
+      else {
+        print "  Taxon not found" >> "upload.log";  close("upload.log");
+        taxoninfo = "--data-urlencode 'observation[species_guess]=" taxon "'";
+      }
     }
     else {
-      print "  Taxon not found" >> "upload.log";  close("upload.log");
-      taxoninfo = "--data-urlencode 'observation[species_guess]=" taxon "'";
+      print "  Record w/o taxon" >> "upload.log";  close("upload.log");
+      taxoninfo = "--data-urlencode 'observation[species_guess]=Plantae'";
     }
 
     # Elements of data
-    date = longlat = elev = collcode = "";
-    fields = 0;
+    # date and TZ
     if ($2) {
       date = "--data-urlencode 'observation[observed_on_string]=" $2 "'" \
         " --data-urlencode 'observation[time_zone]=Osaka'";
     }
-    if (($3) && ($4)) {
+    # Long, Lat
+    if (($3 ~ /^[0-9]+.[0-9]+$/) && ($4 ~ /^[0-9]+.[0-9]+$/)) {
       longlat = "--data-urlencode 'observation[latitude]=" $3 \
         "' --data-urlencode 'observation[longitude]=" $4            \
         "' --data-urlencode 'observation[positional_accuracy]=50'";
       # default accuracy
     }
+    else {
+      print "  Record w/o good long/lat. Skipping\n" >> "upload.log";
+      close("upload.log");
+      print "  Record w/o good long/lat. Skipping" >> "/dev/stderr";
+      close("/dev/stderr");
+      continue;
+    }
+    
+    # Elevation
     if ($5) {
-      elev = "--data-urlencode 'observation[observation_field_values_attributes][" fields "][observation_field_id]=7588' --data-urlencode 'observation[observation_field_values_attributes][" fields++ "][value]=" $5 "'" ;
+      elev = "--data-urlencode 'observation[observation_field_values_attributes][" fields "][observation_field_id]=7588' --data-urlencode 'observation[observation_field_values_attributes][" fields++ "][value]=" $5 " m'" ;
     }
-    if ($1) {
-      collcode = "--data-urlencode 'observation[observation_field_values_attributes][" fields "][observation_field_id]=7584' --data-urlencode 'observation[observation_field_values_attributes][" fields++ "][value]=" $1 "'" ;
-      DESC = DESC " Collection code: " $1 ".";
+    
+    # Collection code
+    collcode = "--data-urlencode 'observation[observation_field_values_attributes][" fields "][observation_field_id]=7584' --data-urlencode 'observation[observation_field_values_attributes][" fields++ "][value]=" $1 "'" ;
+    desc = DESC " Collection code: " $1 ".";
+
+    # Individual id
+    if ($7) {
+      indiv = "--data-urlencode 'observation[observation_field_values_attributes][" fields "][observation_field_id]=6934' --data-urlencode 'observation[observation_field_values_attributes][" fields++ "][value]=" $7 "'" ;
     }
-    desc = "--data-urlencode 'observation[description]=" DESC "'" ;
+    
+    # good det
+    if ($12) {
+      sciname = "--data-urlencode 'observation[observation_field_values_attributes][" fields "][observation_field_id]=7591' --data-urlencode 'observation[observation_field_values_attributes][" fields++ "][value]=" $12 "'" ;
+    }
+    
+    # det by
+    if ($8) {
+      idby = "--data-urlencode 'observation[observation_field_values_attributes][" fields "][observation_field_id]=7589' --data-urlencode 'observation[observation_field_values_attributes][" fields++ "][value]=" $8 "'" ;
+    }
+    else {
+      idby = "--data-urlencode 'observation[observation_field_values_attributes][" fields "][observation_field_id]=7589' --data-urlencode 'observation[observation_field_values_attributes][" fields++ "][value]=S. Tagane'" ;
+    }
+    
+    # det date
+    if ($9) {
+      iddate = "--data-urlencode 'observation[observation_field_values_attributes][" fields "][observation_field_id]=7590' --data-urlencode 'observation[observation_field_values_attributes][" fields++ "][value]=" $9 "'" ;
+    }
+    else if ($2) {
+      iddate = "--data-urlencode 'observation[observation_field_values_attributes][" fields "][observation_field_id]=7590' --data-urlencode 'observation[observation_field_values_attributes][" fields++ "][value]=" $2 "'" ;
+    }
+    
+    # Locality
+    if ($10) {
+      loc = "--data-urlencode 'observation[observation_field_values_attributes][" fields "][observation_field_id]=7587' --data-urlencode 'observation[observation_field_values_attributes][" fields++ "][value]=" $10 "'" ;
+    }
+    
+    # Collectors
+    if ($11) {
+      collectors = "--data-urlencode 'observation[observation_field_values_attributes][" fields "][observation_field_id]=7262' --data-urlencode 'observation[observation_field_values_attributes][" fields++ "][value]=" $11 "'" ;
+    }
+    
+    # Description
+    desc = "--data-urlencode 'observation[description]=" desc "'" ;
 
     print "  Making obs" > "/dev/stderr"; close("/dev/stderr");
-
     parse_json(curl("POST", "Authorization: Bearer " AUTHTOKEN,         \
                     (taxoninfo " " date " " longlat " " elev " " collcode \
-                     " " desc),                                             \
+                     " " indiv " " idby " " iddate " " loc " " collectors \
+                     " " sciname " " desc),                   \
                     "https://www.inaturalist.org/observations.json"));
     
     newid = JSONPATH[0,"\"id\""];
@@ -80,13 +162,7 @@ BEGIN{
     # for checking long/lat:
     print "  Place: " place >> "upload.log";  close("upload.log");
 
-    # Photos
-    # How many?
-    cmd = "find img/" $1 " -type f";
-    RS="\x04";
-    cmd | getline files;
-    close(cmd); RS="\n";
-
+    # Upload photos (already checked above)
     nfiles = split(files, file, "\n");
     for (i = 1 ; i < nfiles; i++) {
       print "  Photo " i ": " file[i] >> "upload.log";  close("upload.log");
@@ -97,7 +173,13 @@ BEGIN{
                       "' -F 'file=@" file[i] "'",\
                       "https://www.inaturalist.org/observation_photos");
       
-      if (newphoto ~ /[Ee]rror/) print "    Photo error!" >> "upload.log";  close("upload.log");
+      if (newphoto ~ /[Ee]rror/) {
+        print "    Photo error!" >> "upload.log";
+        close("upload.log");
+      }
     }
+    delete file;
+    # make lookup table:
+    print $1 "|" newid "\n" >> "upload.log";  close("upload.log");
   }
 }

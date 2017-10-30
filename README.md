@@ -44,10 +44,14 @@ Fields and their iNat id:
 
       dwc:basisOfRecord     7586
       dwc:collectionCode    7584
+      dwc:dateIdentified    7590
+      dwc:identifiedBy      7589
       dwc:locality          7587
       dwc:occurrenceID      7261
       dwc:organismID        6934
       dwc:recordedBy        7262
       dwc:recordNumber      7256
+      dwc:scientificName    7591
       dwc:verbatimElevation 7588
-      
+
+

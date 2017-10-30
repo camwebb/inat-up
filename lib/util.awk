@@ -1,5 +1,5 @@
 function curl(method, header, data, url,    RSIN, curlback, methodpart, \
-              headerpart) {
+              headerpart, cmd) {
   
   RSIN = RS;
   RS="\x04";
@@ -10,9 +10,16 @@ function curl(method, header, data, url,    RSIN, curlback, methodpart, \
   if (header) headerpart = "--header '" header "'";
 
   cmd = "curl -s " methodpart " " headerpart " " data " '" url "'";
-  # print cmd > "/dev/stderr";
+  if (DEBUG) {
+    print cmd > "/dev/stderr";
+    close("/dev/stderr");
+  }
   cmd | getline curlback;
   close(cmd);
   RS=RSIN;
+  if (DEBUG) {
+    print curlback > "/dev/stderr";
+    close("/dev/stderr");
+  }
   return curlback;
 }
