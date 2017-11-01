@@ -7,14 +7,13 @@
 
 @include "lib/JSON_include.awk"
 @include "lib/util.awk"
-@include "lib/secret.awk"   # for your AUTHTOKEN
+@include "lib/config.awk"  
 
 BEGIN{
   
   # Init
   user_config();
   init_json();
-  secret();
   DEBUG = 0;
 
   ## For each collection/observation

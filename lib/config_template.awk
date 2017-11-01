@@ -2,6 +2,17 @@ function user_config() {
   
   # --------------------- USER CONFIG HERE ----------------------------
 
+  # Secrets and tokens
+  # The Application ID you were given when you registered an app with iNat:
+  APPID="...";
+  # The Secret you were given when you registered an app with iNat:
+  APPSECRET="...";
+  # The Callback URL you registered:
+  CALLBACKURL="...";
+
+  # Paste the sting you get from `gettoken` here:
+  AUTHTOKEN="...";
+  
   # Input file
   INFILE = "newobs.csv";  # Name of input file (with relative path if needed)
   HEADER = 0;             # Is there a header 1 or 0
@@ -26,7 +37,7 @@ function user_config() {
   TZ = "Osaka";
 
   # Common text for observation description (no line breaks):
-  DESC = "Plant observed in field, photographed, and collected by one or more of T. Yahara, S. Tagane, H. Toyama, plus additional collectors in dwc:recordedBy field. Field determination by S. Tagane, unless specified in dwc:identifiedBy.";
+  DESC = "";
 
 }
 

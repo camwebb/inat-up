@@ -1,0 +1,46 @@
+#!/bin/gawk -f
+
+# gettoken: Gets user-authorized token and secret from iNat
+# Copyright (c) 2017, Cam Webb <cw@camwebb.info>
+# Free/Open Source Software using GPL v3 license
+# Requires: gawk (v4+), openssl, base64, curl, echo
+
+@include "lib/config.awk" ;
+@include "lib/JSON_include.awk"
+@include "lib/util.awk"
+
+BEGIN {
+
+  user_config();
+  init_json();
+
+  DEBUG = 0;
+  
+  ## Step 1, user to request an authorization token
+  print "\nStep 1: Log into iNat as user who will upload data (Press Return when done)";
+  getline response1 < "/dev/stdin";
+
+  # Ask for the authorization token
+  print "Step 2: Go to this URL into browser:\n  https://www.inaturalist.org/oauth/authorize?client_id=" APPID "&redirect_uri=http%3A%2F%2Fcamwebb.info&response_type=code\n\nStep 3: You will be redirected to iNat. Paste the resulting web address text here (excluding: \"http://camwebb.info?code=\"), and press Return.";
+  getline response2 < "/dev/stdin";
+
+  parse_json(curl("POST", "", "-d 'client_id=" APPID \
+                  "' -d 'client_secret=" APPSECRET   \
+                  "' -d 'code=" response2                 \
+                  "' --data-urlencode 'redirect_uri=" CALLBACKURL \
+                  "' -d 'grant_type=authorization_code'",               \
+                  "https://www.inaturalist.org/oauth/token"));
+
+  if (JSONPATH["\"access_token\""]) {
+    # Success
+    gsub(/"/, "", JSONPATH["\"access_token\""]);
+    print "\nSuccess! Enter this code into `lib/config.awk` as AUTHTOKEN:\n  "\
+      JSONPATH["\"access_token\""];
+  }
+  else {
+    print "Oops, something went wrong. You may have waited too long before "\
+      "Step 3. Exiting";
+  }
+
+  exit;
+}
