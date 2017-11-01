@@ -1,0 +1,4 @@
+lib/secret.awk
+
+img/*
+!img/README.md

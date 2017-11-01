@@ -1,56 +1,53 @@
 #!/usr/bin/gawk -f
 
+# iNat-up
+# For loading observations to iNaturalist
+# by Cam Webb <cw@camwebb.info> 2017
+# License: CC:C0
+
 @include "lib/JSON_include.awk"
 @include "lib/util.awk"
 @include "lib/secret.awk"   # for your AUTHTOKEN
 
 BEGIN{
   
-  # Add common text for description here (no line breaks):
-  DESC = "Plant observed in field, photographed, and collected by one or more of T. Yahara, S. Tagane, H. Toyama, plus additional collectors in dwc:recordedBy field. Field determination by S. Tagane, unless specified in dwc:identifiedBy.";
-  
+  # Init
+  user_config();
+  init_json();
   secret();
-  # for JSONPATH from lib/JSON_include.awk
-  JSONPATH["INIT"] = "INIT"; BRIEF=1; STREAM=1;
   DEBUG = 0;
-  FS="|";
 
   ## For each collection/observation
-  while ((getline < "newobs.csv") > 0) {
+  while ((getline < INFILE) > 0) {
     # Re-init
     taxon = taxoninfo = testtaxon = testrank = testtaxonid          \
       = date = longlat = elev = collcode = idby = indiv = iddate        \
       = loc = collectors = sciname = cmd = files = nfiles = newphoto \
-      = newid = place = "";
-    desc = DESC;
-    fields = 0;
+      = newid = place = ""; desc = DESC; fields = 0;
 
-    if (!$1) {
-      print "Record w/o collcode. Skipping\n" >> "upload.log";
-      close("upload.log");
-      print "Record w/o collcode. Skipping" > "/dev/stderr";
-      close("/dev/stderr");
+    # Skip the header
+    if ((HEADER) && (FNR == 1)) continue;
+    
+    if (!$fCollCode) {
+      log("Record w/o collcode. Skipping\n");
       continue;
     }
-    print "Coll: " $1 >> "upload.log"; close("upload.log");
-    print "Coll: " $1 > "/dev/stderr"; close("/dev/stderr");
+
+    log("Coll: " $fCollCode);
 
     # Test for photos
-    cmd = "find img/" $1 " -type f | sort";
+    cmd = "find img/" $fCollCode " -type f | sort";
     RS="\x04";
     cmd | getline files;
     close(cmd); RS="\n";
     
     if (!files) {
-      print "  No directory of images. Skipping\n" >> "upload.log";
-      close("upload.log");
-      print "  No directory of images. Skipping" > "/dev/stderr";
-      close("/dev/stderr");
+      log("  No directory of images. Skipping\n");
       continue;
     }
     
     # Check for the name in iNat
-    taxon = $6;
+    taxon = $fName;
     if (taxon) {
       # clean
       gsub(/^\ +/,"",taxon); gsub(/\ +$/,"",taxon);
@@ -82,14 +79,14 @@ BEGIN{
 
     # Elements of data
     # date and TZ
-    if ($2) {
-      date = "--data-urlencode 'observation[observed_on_string]=" $2 "'" \
+    if ($fCollDate) {
+      date = "--data-urlencode 'observation[observed_on_string]=" $fCollDate "'" \
         " --data-urlencode 'observation[time_zone]=Osaka'";
     }
     # Long, Lat
-    if (($3 ~ /^[0-9]+.[0-9]+$/) && ($4 ~ /^[0-9]+.[0-9]+$/)) {
-      longlat = "--data-urlencode 'observation[latitude]=" $3 \
-        "' --data-urlencode 'observation[longitude]=" $4            \
+    if (($fLat ~ /^[0-9]+.[0-9]+$/) && ($fLong ~ /^[0-9]+.[0-9]+$/)) {
+      longlat = "--data-urlencode 'observation[latitude]=" $fLat \
+        "' --data-urlencode 'observation[longitude]=" $fLong            \
         "' --data-urlencode 'observation[positional_accuracy]=50'";
       # default accuracy
     }
@@ -102,48 +99,48 @@ BEGIN{
     }
     
     # Elevation
-    if ($5) {
-      elev = "--data-urlencode 'observation[observation_field_values_attributes][" fields "][observation_field_id]=7588' --data-urlencode 'observation[observation_field_values_attributes][" fields++ "][value]=" $5 " m'" ;
+    if ($fElev) {
+      elev = "--data-urlencode 'observation[observation_field_values_attributes][" fields "][observation_field_id]=7588' --data-urlencode 'observation[observation_field_values_attributes][" fields++ "][value]=" $fElev " m'" ;
     }
     
     # Collection code
-    collcode = "--data-urlencode 'observation[observation_field_values_attributes][" fields "][observation_field_id]=7584' --data-urlencode 'observation[observation_field_values_attributes][" fields++ "][value]=" $1 "'" ;
-    desc = DESC " Collection code: " $1 ".";
+    collcode = "--data-urlencode 'observation[observation_field_values_attributes][" fields "][observation_field_id]=7584' --data-urlencode 'observation[observation_field_values_attributes][" fields++ "][value]=" $fCollCode "'" ;
+    desc = DESC " Collection code: " $fCollCode ".";
 
     # Individual id
-    if ($7) {
-      indiv = "--data-urlencode 'observation[observation_field_values_attributes][" fields "][observation_field_id]=6934' --data-urlencode 'observation[observation_field_values_attributes][" fields++ "][value]=" $7 "'" ;
+    if ($fIndiv) {
+      indiv = "--data-urlencode 'observation[observation_field_values_attributes][" fields "][observation_field_id]=6934' --data-urlencode 'observation[observation_field_values_attributes][" fields++ "][value]=" $fIndiv "'" ;
     }
     
     # good det
-    if ($12) {
-      sciname = "--data-urlencode 'observation[observation_field_values_attributes][" fields "][observation_field_id]=7591' --data-urlencode 'observation[observation_field_values_attributes][" fields++ "][value]=" $12 "'" ;
+    if ($fSciName) {
+      sciname = "--data-urlencode 'observation[observation_field_values_attributes][" fields "][observation_field_id]=7591' --data-urlencode 'observation[observation_field_values_attributes][" fields++ "][value]=" $fSciName "'" ;
     }
     
     # det by
-    if ($8) {
-      idby = "--data-urlencode 'observation[observation_field_values_attributes][" fields "][observation_field_id]=7589' --data-urlencode 'observation[observation_field_values_attributes][" fields++ "][value]=" $8 "'" ;
+    if ($fDetBy) {
+      idby = "--data-urlencode 'observation[observation_field_values_attributes][" fields "][observation_field_id]=7589' --data-urlencode 'observation[observation_field_values_attributes][" fields++ "][value]=" $fDetBy "'" ;
     }
     else {
       idby = "--data-urlencode 'observation[observation_field_values_attributes][" fields "][observation_field_id]=7589' --data-urlencode 'observation[observation_field_values_attributes][" fields++ "][value]=S. Tagane'" ;
     }
     
     # det date
-    if ($9) {
-      iddate = "--data-urlencode 'observation[observation_field_values_attributes][" fields "][observation_field_id]=7590' --data-urlencode 'observation[observation_field_values_attributes][" fields++ "][value]=" $9 "'" ;
+    if ($fDetDate) {
+      iddate = "--data-urlencode 'observation[observation_field_values_attributes][" fields "][observation_field_id]=7590' --data-urlencode 'observation[observation_field_values_attributes][" fields++ "][value]=" $fDetDate "'" ;
     }
-    else if ($2) {
-      iddate = "--data-urlencode 'observation[observation_field_values_attributes][" fields "][observation_field_id]=7590' --data-urlencode 'observation[observation_field_values_attributes][" fields++ "][value]=" $2 "'" ;
+    else if ($fCollDate) {
+      iddate = "--data-urlencode 'observation[observation_field_values_attributes][" fields "][observation_field_id]=7590' --data-urlencode 'observation[observation_field_values_attributes][" fields++ "][value]=" $fCollDate "'" ;
     }
     
     # Locality
-    if ($10) {
-      loc = "--data-urlencode 'observation[observation_field_values_attributes][" fields "][observation_field_id]=7587' --data-urlencode 'observation[observation_field_values_attributes][" fields++ "][value]=" $10 "'" ;
+    if ($fLoc) {
+      loc = "--data-urlencode 'observation[observation_field_values_attributes][" fields "][observation_field_id]=7587' --data-urlencode 'observation[observation_field_values_attributes][" fields++ "][value]=" $fLoc "'" ;
     }
     
     # Collectors
-    if ($11) {
-      collectors = "--data-urlencode 'observation[observation_field_values_attributes][" fields "][observation_field_id]=7262' --data-urlencode 'observation[observation_field_values_attributes][" fields++ "][value]=" $11 "'" ;
+    if ($fCollBy) {
+      collectors = "--data-urlencode 'observation[observation_field_values_attributes][" fields "][observation_field_id]=7262' --data-urlencode 'observation[observation_field_values_attributes][" fields++ "][value]=" $fCollBy "'" ;
     }
     
     # Description
@@ -180,6 +177,6 @@ BEGIN{
     }
     delete file;
     # make lookup table:
-    print $1 "|" newid "\n" >> "upload.log";  close("upload.log");
+    print $fCollCode "|" newid "\n" >> "upload.log";  close("upload.log");
   }
 }

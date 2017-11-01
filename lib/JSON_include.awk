@@ -62,8 +62,13 @@
 
 ## 1. COMMENTED ALL ABOVE
 
-## 2. ADD `JSONPATH["INIT"]="INIT"; BRIEF=1; STREAM=1;` to BEGIN of main file
+## 2. ADDED:
 
+function init_json() {
+  # JSONPATH["INIT"]="INIT";
+  BRIEF=1; STREAM=1;
+}
+  
 ## 3. ADDED:
 function parse_json(jsondata) { 
   reset()

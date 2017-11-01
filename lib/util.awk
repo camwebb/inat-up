@@ -23,3 +23,10 @@ function curl(method, header, data, url,    RSIN, curlback, methodpart, \
   }
   return curlback;
 }
+
+function log(msg) {
+  print msg >> "upload.log";
+  close("upload.log");
+  print msg > "/dev/stderr";
+  close("/dev/stderr");
+}
