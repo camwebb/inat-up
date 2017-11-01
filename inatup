@@ -25,14 +25,18 @@ BEGIN{
       = newid = place = ""; desc = DESC; fields = 0;
 
     # Skip the header
-    if ((HEADER) && (FNR == 1)) continue;
+    ++lineno;
+    if ((HEADER) && (lineno == 1)) continue;
+
+    # Clean spaces
+    gsub(/\|\ +/,"|", $0);  gsub(/\ +\|/,"|", $0);
     
     if (!$fCollCode) {
-      log("Record w/o collcode. Skipping\n");
+      makelog("Record w/o collcode. Skipping\n");
       continue;
     }
 
-    log("Coll: " $fCollCode);
+    makelog("Coll: " $fCollCode);
 
     # Test for photos
     cmd = "find img/" $fCollCode " -type f | sort";
@@ -41,7 +45,7 @@ BEGIN{
     close(cmd); RS="\n";
     
     if (!files) {
-      log("  No directory of images. Skipping\n");
+      makelog("  No directory of images. Skipping\n");
       continue;
     }
     
