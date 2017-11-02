@@ -6,6 +6,7 @@ function curl(method, header, data, url,    RSIN, curlback, methodpart, \
 
   if (method == "GET") methodpart = "-G";
   if (method == "POST") methodpart = "-X POST";
+  if (method == "DELETE") methodpart = "-X DELETE";
   
   if (header) headerpart = "--header '" header "'";
 

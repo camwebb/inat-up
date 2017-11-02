@@ -16,20 +16,31 @@ BEGIN{
   init_json();
   DEBUG = 0;
 
+  ## read the args
+
+  if ((ARGC == 3) && (ARGV[1] == "--del")) {
+    delobs(ARGV[2]);
+    exit;
+  }
+  
   ## For each collection/observation
   while ((getline < INFILE) > 0) {
     # Re-init
-    taxon = taxoninfo = testtaxon = testrank = testtaxonid          \
+    taxoninfo = testtaxon = testrank = testtaxonid          \
       = date = longlat = elev = collcode = idby = indiv = iddate        \
       = loc = collectors = sciname = cmd = files = nfiles = newphoto \
-      = newid = place = ""; desc = DESC; fields = 0;
+      = newid = place = taxfound = ntype = ""; desc = DESC; fields = 0;
 
     # Skip the header
     ++lineno;
     if ((HEADER) && (lineno == 1)) continue;
 
-    # Clean spaces
-    gsub(/\|\ +/,"|", $0);  gsub(/\ +\|/,"|", $0);
+    # Clean spaces around data (need to escape any regex special chars)
+    sep = FS; if (sep == "|") sep = "\\|";
+    m = sep "\\ +" ; gsub(m, FS, $0);
+    m = "\\ +" sep ; gsub(m, FS, $0);
+    # remove any quotes (too hard to work out how to escape them!)
+    gsub(/["']/,"",$0);
     
     if (!$fCollCode) {
       makelog("Record w/o collcode. Skipping\n");
@@ -46,46 +57,19 @@ BEGIN{
     
     if (!files) {
       makelog("  No directory of images. Skipping\n");
+      idlist[$fCollCode] = ""; 
       continue;
     }
     
-    # Check for the name in iNat
-    taxon = $fName;
-    if (taxon) {
-      # clean
-      gsub(/^\ +/,"",taxon); gsub(/\ +$/,"",taxon);
-      gsub(/\ +/," ",taxon); 
-      print "  Taxon: " taxon >> "upload.log" ;  close("upload.log");
-      print "  Querying taxon" > "/dev/stderr"; close("/dev/stderr");
-
-      parse_json(curl("GET", "Accept: application/json",    \
-                      "--data-urlencode 'q=" taxon "'",
-                      "http://api.inaturalist.org/v1/taxa/autocomplete" ));
+    ### 1. Make the new obs ###
     
-      testtaxon = gensub(/"/,"","G", JSONPATH["\"results\"",0,"\"name\""]);
-      testrank = gensub(/"/,"","G", JSONPATH["\"results\"",0,"\"rank\""]);
-      testtaxonid = gensub(/"/,"","G", JSONPATH["\"results\"",0,"\"id\""]);
-      if (taxon == testtaxon) {
-        print "  Taxon found: " testtaxon "; rank: " testrank"; ID: " \
-          testtaxonid >> "upload.log";  close("upload.log");
-        taxoninfo = "--data-urlencode 'observation[taxon_id]=" testtaxonid "'";
-      }
-      else {
-        print "  Taxon not found" >> "upload.log";  close("upload.log");
-        taxoninfo = "--data-urlencode 'observation[species_guess]=" taxon "'";
-      }
-    }
-    else {
-      print "  Record w/o taxon" >> "upload.log";  close("upload.log");
-      taxoninfo = "--data-urlencode 'observation[species_guess]=Plantae'";
-    }
-
     # Elements of data
     # date and TZ
     if ($fCollDate) {
-      date = "--data-urlencode 'observation[observed_on_string]=" $fCollDate "'" \
-        " --data-urlencode 'observation[time_zone]=Osaka'";
+      date = "--data-urlencode 'observation[observed_on_string]=" $fCollDate \
+        "' --data-urlencode 'observation[time_zone]=" TZ "'";
     }
+
     # Long, Lat
     if (($fLat ~ /^[0-9]+.[0-9]+$/) && ($fLong ~ /^[0-9]+.[0-9]+$/)) {
       longlat = "--data-urlencode 'observation[latitude]=" $fLat \
@@ -94,10 +78,8 @@ BEGIN{
       # default accuracy
     }
     else {
-      print "  Record w/o good long/lat. Skipping\n" >> "upload.log";
-      close("upload.log");
-      print "  Record w/o good long/lat. Skipping" >> "/dev/stderr";
-      close("/dev/stderr");
+      makelog("  Record w/o good long/lat. Skipping\n");
+      idlist[$fCollCode] = ""; 
       continue;
     }
     
@@ -113,27 +95,6 @@ BEGIN{
     # Individual id
     if ($fIndiv) {
       indiv = "--data-urlencode 'observation[observation_field_values_attributes][" fields "][observation_field_id]=6934' --data-urlencode 'observation[observation_field_values_attributes][" fields++ "][value]=" $fIndiv "'" ;
-    }
-    
-    # good det
-    if ($fSciName) {
-      sciname = "--data-urlencode 'observation[observation_field_values_attributes][" fields "][observation_field_id]=7591' --data-urlencode 'observation[observation_field_values_attributes][" fields++ "][value]=" $fSciName "'" ;
-    }
-    
-    # det by
-    if ($fDetBy) {
-      idby = "--data-urlencode 'observation[observation_field_values_attributes][" fields "][observation_field_id]=7589' --data-urlencode 'observation[observation_field_values_attributes][" fields++ "][value]=" $fDetBy "'" ;
-    }
-    else {
-      idby = "--data-urlencode 'observation[observation_field_values_attributes][" fields "][observation_field_id]=7589' --data-urlencode 'observation[observation_field_values_attributes][" fields++ "][value]=S. Tagane'" ;
-    }
-    
-    # det date
-    if ($fDetDate) {
-      iddate = "--data-urlencode 'observation[observation_field_values_attributes][" fields "][observation_field_id]=7590' --data-urlencode 'observation[observation_field_values_attributes][" fields++ "][value]=" $fDetDate "'" ;
-    }
-    else if ($fCollDate) {
-      iddate = "--data-urlencode 'observation[observation_field_values_attributes][" fields "][observation_field_id]=7590' --data-urlencode 'observation[observation_field_values_attributes][" fields++ "][value]=" $fCollDate "'" ;
     }
     
     # Locality
@@ -155,14 +116,115 @@ BEGIN{
                      " " indiv " " idby " " iddate " " loc " " collectors \
                      " " sciname " " desc),                   \
                     "https://www.inaturalist.org/observations.json"));
+
+    # test for error (FIXME)
     
     newid = JSONPATH[0,"\"id\""];
     place = JSONPATH[0,"\"place_guess\""];
-    print "  New Obs id: " newid >> "upload.log";
+    makelog("  New Obs id: " newid );
+    idlist[$fCollCode] = newid;
     # for checking long/lat:
-    print "  Place: " place >> "upload.log";  close("upload.log");
+    makelog("  Place: " place );
 
-    # Upload photos (already checked above)
+    ### 2. Add the det ###
+
+    if (!$fName) ntype = "none";
+    # Check for the name in iNat:
+    else {
+      # clean any extra spaces between Genus and sp
+      gsub(/\ +/," ",$fName); 
+      makelog("  Taxon: " $fName );
+
+      # specific epithet?
+      if ($fName ~ /\ /) ntype = "gs";
+      else ntype = "g"; # Also works for just a family name
+      
+      parse_json(curl("GET", "Accept: application/json",    \
+                      "--data-urlencode 'q=" $fName "'",
+                      "http://api.inaturalist.org/v1/taxa/autocomplete" ));
+    
+      testtaxon   = gensub(/"/,"","G", JSONPATH["\"results\"",0,"\"name\""]);
+      testrank    = gensub(/"/,"","G", JSONPATH["\"results\"",0,"\"rank\""]);
+      testtaxonid = gensub(/"/,"","G", JSONPATH["\"results\"",0,"\"id\""]);
+
+      # if found
+      if ($fName == testtaxon) {
+        makelog("  Taxon found: " testtaxon "; rank: " testrank"; ID: " \
+                testtaxonid );
+        taxoninfo = "--data-urlencode 'identification[taxon_id]="   \
+          testtaxonid "'";
+        taxfound = "gs";
+      }
+      # if not, and the first try was g+s, can we match the g?  
+      else if (ntype == "gs") {
+        # Query again
+        makelog("  G+sp not found. Querying genus (or fam) only");
+        # re-init
+        testtaxon = testrank = testtaxonid = genus = "";
+        genus = gensub(/\ .*$/, "", "G", $fName);
+        parse_json(curl("GET", "Accept: application/json",  \
+                        "--data-urlencode 'q=" genus "'",
+                        "http://api.inaturalist.org/v1/taxa/autocomplete" ));
+    
+        testtaxon   = gensub(/"/,"","G", JSONPATH["\"results\"",0,"\"name\""]);
+        testrank    = gensub(/"/,"","G", JSONPATH["\"results\"",0,"\"rank\""]);
+        testtaxonid = gensub(/"/,"","G", JSONPATH["\"results\"",0,"\"id\""]);
+
+        # if found
+        if (genus == testtaxon) {
+          makelog("  Genus (or fam) found: " testtaxon "; rank: " testrank \
+                  "; ID: " testtaxonid );
+          taxoninfo = "--data-urlencode 'identification[taxon_id]=" \
+            testtaxonid "'";
+          taxfound = "g";
+        }
+      }
+    }
+
+    # Default taxon
+    if (!taxfound) {
+      makelog("  Name not found (or not given). Using Plantae.");
+      taxoninfo = "--data-urlencode 'identification[taxon_id]=47126'";
+    }
+
+    # now for the appropriate other details
+
+    if ($fSciName) {
+      # always give the sci name, if it exists
+      detnote = "dwc:scientificName = " $fSciName "\n";
+      # Ugly. Sending real new line, but curl --data-urlencode gets it right
+    }
+
+    # only give the $fName if the matched taxon_id has less info than $fName
+    if ((ntype == "gs") && (taxfound == "g")) {
+      detnote = detnote "(FIXME: " $fName " not found in iNat taxonomy)\n";
+    }
+    # else: the name that was found (gs or g) for taxon_id is sufficient
+    else if (($fName) && (!taxfound)) {
+      detnote = detnote " (FIXME: " $fName " not found in iNat taxonomy)\n";
+    }
+
+    # determiner and date
+    if ($fDetBy) detnote = detnote "dwc:identifiedBy = " $fDetBy "\n" ;
+    else detnote = detnote "dwc:identifiedBy = " DEFDETBY "\n" ;
+
+    if ($fDetDate) detnote = detnote "dwc:dateIdentified = " $fDetDate ;
+    # else if ($fCollDate) detnote = detnote "dwc:dateIdentified " $fCollDate ;
+
+    # make the curl parameter
+    detnote = "--data-urlencode 'identification[body]=" detnote "'";
+
+    # POST the det
+    print "  Making det" > "/dev/stderr"; close("/dev/stderr");
+    parse_json(curl("POST", ("Authorization: Bearer " AUTHTOKEN),       \
+                    ( "--data-urlencode 'identification[observation_id]=" \
+                      newid "' " taxoninfo " " detnote ) ,              \
+                    "https://www.inaturalist.org/identifications.json"));
+
+    # test for error (FIXME)
+    
+    ### 3. Upload photos (already checked above) ###
+    
     nfiles = split(files, file, "\n");
     for (i = 1 ; i < nfiles; i++) {
       print "  Photo " i ": " file[i] >> "upload.log";  close("upload.log");
@@ -182,4 +244,33 @@ BEGIN{
     # make lookup table:
     print $fCollCode "|" newid "\n" >> "upload.log";  close("upload.log");
   }
+  
+}
+
+function delobs(obsid      ) {
+  # basic error checking
+  if (obsid !~ /^[0-9]+$/) {
+    print "Argument supplied is not an iNat observation format. Exiting." \
+      > "/dev/stderr";
+  }
+  else if (obsid < SAFEOBS) {
+    print "Observation # is too low, below safe threshold (" SAFEOBS ")." \
+      " Exiting." > "/dev/stderr";
+  }
+  else {
+    print "Attempting to delete observation " obsid > "/dev/stderr";
+    delreturn = curl("DELETE", ("Authorization: Bearer " AUTHTOKEN), "", \
+                     ("https://www.inaturalist.org/observations/" obsid \
+                      ".json"));
+    # Error check
+    if (delreturn) {
+      makelog("Data was returned, indicating an error: " delreturn);
+    }
+    else {
+      # Note API reference says info should be returned as JSON, but a
+      #   successful delete seems to return nothing. So no parse_json() used.
+      makelog("Obs ID " obsid " has been deleted.\n");
+    }
+  }
+  return;
 }
