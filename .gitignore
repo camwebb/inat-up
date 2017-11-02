@@ -1,4 +1,5 @@
 lib/config.awk
+NOTES.md
 
 img/*
 !img/README.md

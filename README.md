@@ -1,57 +1,43 @@
-# inat-up
+# iNat-up
 
-Uploading of data and images to iNat via the API
+Batch uploading of data and images to iNat via the API.
 
-## Authentication
+## Installation
 
-You will need an `APP_ID` and `APP_SECRET_ID`. Create an app at <https://www.inaturalist.org/oauth/applications>.  
+ 1. Clone this project.
+ 2. Install `gawk` ([GNU Awk](https://www.gnu.org/software/gawk/))
+    v.4.0+, if nececessary. (It’s almost certainly pre-installed on a
+    Linux system, but some distros are still using v.3.)
+ 3. Make sure the first line of scripts `inatup` and `gettoken` point to your
+    `gawk` executable.
+ 4. Copy `lib/config_template.awk` to `lib/config.awk`, and edit as
+    needed (see below). 
 
-Log in with a browser and go to this link:
+## Use
 
-      https://www.inaturalist.org/oauth/authorize?client_id=APP_ID&\
-      redirect_uri=http%3A%2F%2Ffoo.com&response_type=code
+### Getting an Authorization token
 
-Authorize the app. You will be sent to this page:
+ 1. [Register an app with iNat](https://www.inaturalist.org/oauth/applications)
+    to get the `APPID` and `APPSECRET`. Enter these in the config file.
+ 2. Run `./gettoken` and follow the instructions. Paste the `AUTHTOKEN` into 
+    the config file.
+ 
+### Uploading data to iNat
 
-      http://foo.com/?code=AUTH_CODE
+ 1. Prepare a plain text file, with delimiters of your choice (`|` or
+    `TAB` recommended), and make sure i) the field numbers match those in
+    the config file, and ii) that any header row is noted with a `HEADER
+    = 1` in the config file.
+ 2. Place your images for each observation/collection in a directory
+    under `img/` with the name of the directory exactly matching the
+    collection code you specified in step 1. Avoid spaces in the name
+    of the collection code (replace with a `_`.
+ 3. Run with `./inatup`.  The actions are logged in `upload.log`. If
+    you need a list of coll. codes and their iNat obs. ID, just `grep '|'
+    upload.log > coll2obsid.csv`
 
-This code indicates the user has authorized this app. Within a few
-minutes (important!) send this request:
-      
-      curl -d client_id=APP_ID -d client_secret=APP_SECRET_ID \
-        -d code=AUTH_CODE -d redirect_uri=http://foo.com \
-        -d grant_type=authorization_code \
-        https://www.inaturalist.org/oauth/token
+### Post-upload 
 
-You will get back some JSON:
 
-      {
-         "access_token":"AUTH_TOKEN",
-         "token_type":"bearer",
-         "scope":"write",
-         "created_at":1508880263
-       }
-
-This `AUTH_TOKEN` can be used for a while (weeks?) to make calls to the API. 
-
-## Using `dwc:` fields
-
-Find the available darwin core fields with this:
-
-      curl https://www.inaturalist.org/observation_fields.json?q=dwc
-
-Fields and their iNat id:
-
-      dwc:basisOfRecord     7586
-      dwc:collectionCode    7584
-      dwc:dateIdentified    7590
-      dwc:identifiedBy      7589
-      dwc:locality          7587
-      dwc:occurrenceID      7261
-      dwc:organismID        6934
-      dwc:recordedBy        7262
-      dwc:recordNumber      7256
-      dwc:scientificName    7591
-      dwc:verbatimElevation 7588
 
 

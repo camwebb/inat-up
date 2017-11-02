@@ -15,7 +15,7 @@ function user_config() {
   
   # Input file
   INFILE = "newobs.csv";  # Name of input file (with relative path if needed)
-  HEADER = 0;             # Is there a header 1 or 0
+  HEADER = 1;             # Is there a header 1 or 0
   FS="|";                 # Field separator
   
   # Map your field order, by changing values for variables (1, 2, ...)
@@ -38,6 +38,12 @@ function user_config() {
 
   # Common text for observation description (no line breaks):
   DESC = "";
+
+  # Default determiner
+  DEFDETBY = "S. Tagane";
+ 
+  # Reject attempts to delete obs with id less than
+  SAFEOBS = 8651800;
 
 }
 
