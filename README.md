@@ -65,5 +65,12 @@ interface, or via this app. To delete an observation:
      <https://www.inaturalist.org/observations/8573308>)
  2. Run `./inatup --del <observation_id>`
 
+----
+
+## Thanks to...
+
+T. Yahara and S. Tagane for discussions that let to the first version
+of this software, and for their desire to share their plant images. And to iNat!
+
 
 
