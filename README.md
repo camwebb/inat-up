@@ -4,10 +4,10 @@ Script for batch uploading of data and images to iNat via the API. Can
 be used for research collections, or just multiple personal
 observations.
 
-**Please note**: After conferring with the management of iNat about
-the appropriateness of batch uploading research collection/specimen
-data as iNat observations (in Nov 2017), I suggest the following
-guidelines:
+**Please note**: After conferring (in Nov 2017) with the management of
+iNat about the appropriateness of batch uploading research
+collection/specimen data into iNat observations, I suggest the
+following guidelines:
 
  * Observations should only be uploaded to an account with an _active_
    owner, someone who will respond to comments, be a community
