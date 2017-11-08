@@ -28,8 +28,9 @@ BEGIN{
     # Re-init
     taxoninfo = testtaxon = testrank = testtaxonid          \
       = date = longlat = elev = collcode = idby = indiv = iddate        \
-      = loc = collectors = sciname = cmd = files = nfiles = newphoto \
-      = newid = place = taxfound = ntype = ""; desc = DESC; fields = 0;
+      = loc = collectors = cmd = files = nfiles = newphoto \
+      = newid = place = taxfound = ntype = nparts = qname = "";
+    desc = DESC; fields = 0;
 
     # Skip the header
     ++lineno;
@@ -89,9 +90,11 @@ BEGIN{
     }
     
     # Collection code
-    collcode = "--data-urlencode 'observation[observation_field_values_attributes][" fields "][observation_field_id]=7584' --data-urlencode 'observation[observation_field_values_attributes][" fields++ "][value]=" $fCollCode "'" ;
-    desc = DESC " Collection code: " $fCollCode ".";
-
+    if (COLLS) {
+      collcode = "--data-urlencode 'observation[observation_field_values_attributes][" fields "][observation_field_id]=7584' --data-urlencode 'observation[observation_field_values_attributes][" fields++ "][value]=" $fCollCode "'" ;
+      desc = DESC " Collection code: " $fCollCode ".";
+    }
+    
     # Individual id
     if ($fIndiv) {
       indiv = "--data-urlencode 'observation[observation_field_values_attributes][" fields "][observation_field_id]=6934' --data-urlencode 'observation[observation_field_values_attributes][" fields++ "][value]=" $fIndiv "'" ;
@@ -114,7 +117,7 @@ BEGIN{
     parse_json(curl("POST", "Authorization: Bearer " AUTHTOKEN,         \
                     (taxoninfo " " date " " longlat " " elev " " collcode \
                      " " indiv " " idby " " iddate " " loc " " collectors \
-                     " " sciname " " desc),                   \
+                     " " desc),                   \
                     "https://www.inaturalist.org/observations.json"));
 
     # test for error (FIXME)
@@ -136,11 +139,17 @@ BEGIN{
       makelog("  Taxon: " $fName );
 
       # specific epithet?
-      if ($fName ~ /\ /) ntype = "gs";
-      else ntype = "g"; # Also works for just a family name
+      # if ($fName ~ /\ /) ntype = "gs";
+      nparts = split($fName, npart, " ");
+      if (nparts > 1) {
+        ntype = "gs"; qname = npart[1] " " npart[2]; }
+      else {
+        ntype = "g"; # Also works for just a family name
+        qname = npart[1];
+      }
       
       parse_json(curl("GET", "Accept: application/json",    \
-                      "--data-urlencode 'q=" $fName "'",
+                      "--data-urlencode 'q=" qname "'",\
                       "http://api.inaturalist.org/v1/taxa/autocomplete" ));
     
       testtaxon   = gensub(/"/,"","G", JSONPATH["\"results\"",0,"\"name\""]);
@@ -161,7 +170,8 @@ BEGIN{
         makelog("  G+sp not found. Querying genus (or fam) only");
         # re-init
         testtaxon = testrank = testtaxonid = genus = "";
-        genus = gensub(/\ .*$/, "", "G", $fName);
+        # genus = gensub(/\ .*$/, "", "G", $fName);
+        genus = npart[1];  # redundent, fixme
         parse_json(curl("GET", "Accept: application/json",  \
                         "--data-urlencode 'q=" genus "'",
                         "http://api.inaturalist.org/v1/taxa/autocomplete" ));
@@ -184,22 +194,23 @@ BEGIN{
     # Default taxon
     if (!taxfound) {
       makelog("  Name not found (or not given). Using Plantae.");
-      taxoninfo = "--data-urlencode 'identification[taxon_id]=47126'";
+      taxoninfo = "--data-urlencode 'identification[taxon_id]=" DEFTAXID "'";
     }
 
     # now for the appropriate other details
 
-    if ($fSciName) {
+    if (nparts > 2) {
+      # if ($fSciName) {
       # always give the sci name, if it exists
-      detnote = "dwc:scientificName = " $fSciName "\n";
+      detnote = "dwc:scientificName = " $fName "\n";
       # Ugly. Sending real new line, but curl --data-urlencode gets it right
     }
 
     # only give the $fName if the matched taxon_id has less info than $fName
     if ((ntype == "gs") && (taxfound == "g")) {
       detnote = detnote "(FIXME: " $fName " not found in iNat taxonomy)\n";
+      # else: the name that was found (gs or g) for taxon_id is sufficient
     }
-    # else: the name that was found (gs or g) for taxon_id is sufficient
     else if (($fName) && (!taxfound)) {
       detnote = detnote " (FIXME: " $fName " not found in iNat taxonomy)\n";
     }
@@ -241,6 +252,7 @@ BEGIN{
       }
     }
     delete file;
+    delete npart;
     # make lookup table:
     print $fCollCode "|" newid "\n" >> "upload.log";  close("upload.log");
   }

@@ -1,6 +1,25 @@
 # iNat-up
 
-Batch uploading of data and images to iNat via the API.
+Script for batch uploading of data and images to iNat via the API. Can
+be used for research collections, or just multiple personal
+observations.
+
+**Please note**: After conferring with the management of iNat about
+the appropriateness of batch uploading research collection/specimen
+data as iNat observations (in Nov 2017), I suggest the following
+guidelines:
+
+ * Observations should only be uploaded to an account with an _active_
+   owner, someone who will respond to comments, be a community
+   participant, and gain some personal benefit from the
+   site. (K. Ueda: “If observations don't come along with the people
+   who observed them, that's a problem.”)
+ * Only upload observations with photographs, the majority of which
+   should be field/fresh images. In some exceptional circumstances it
+   may be desirable to upload images of preserved specimens.
+ * _Do_ make the effort to add species to the iNat taxonomy if they do
+   not already exist (see below), rather than just leaving accurate
+   determinations in the extended identification notes field.
 
 ## Installation
 
@@ -70,7 +89,8 @@ interface, or via this app. To delete an observation:
 ## Thanks to...
 
 T. Yahara and S. Tagane for discussions that let to the first version
-of this software, and for their desire to share their plant images. And to iNat!
+of this software, and for their desire to share their plant
+images. And to iNat, especially Ken-ichi Ueda.
 
 
 
