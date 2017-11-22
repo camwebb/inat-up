@@ -32,6 +32,21 @@ following guidelines:
  4. Copy `lib/config_template.awk` to `lib/config.awk`, and edit as
     needed (see below). 
 
+### Installation on Windows
+
+These scripts can be made to work under Windows, I think (tested only
+with the `wineconsole` emulator). You will need some extra utilities:
+
+ * `gawk.exe` from [here](https://www.klabaster.com/freeware.htm)
+ * `curl.exe` from [here](https://curl.haxx.se/download.html) (use
+   Win32-Generic)
+ * `sort.exe` and `find.exe` from
+   [here](https://sourceforge.net/projects/unxutils/files/)
+ 
+Unzip the downloaded packages and locate the above executables. Place
+them in the same directory as the `inatup` script. Then run with `gawk
+-f inatup`.
+
 ## Use
 
 ### Getting an Authorization token

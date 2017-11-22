@@ -1,2 +1,2 @@
-Collcode | Date       | Lat      | Long       | Elev(m) | Name               | IndivCode       | DetBy       | DetDate            | Locality                              | Collectors                      | SciName      
-YTT_VXXX | 2014-11-20 | 12.04281 | 108.489175 | 1456    | Uncaria tomentosa  | VN-BDNB-G-V1944 | J. Bloggs   | 2017-01-01         | Lam Dong Province. Bi Doup Nui Ba NP  | Toyama H., Tagane S., Dang V.S. | Uncaria tomentosa Foo.
+Collcode | Date       | Lat      | Long       | Elev(m) | Name                 | IndivCode | DetBy    | DetDate    | Locality      | Collectors  
+obs01    | 2017-11-07 | 30.25487 | 130.430331 | 0       | Acanthurus whitei L. | fish1     | J.Bloggs | 2017-11-20 | Reef 1, Ocean | J.Bloggs

@@ -36,6 +36,9 @@ BEGIN{
     ++lineno;
     if ((HEADER) && (lineno == 1)) continue;
 
+    # Skip commented out rows
+    if ($0 ~ /^#/) continue;
+    
     # Clean spaces around data (need to escape any regex special chars)
     sep = FS; if (sep == "|") sep = "\\|";
     m = sep "\\ +" ; gsub(m, FS, $0);
@@ -217,7 +220,7 @@ BEGIN{
 
     # determiner and date
     if ($fDetBy) detnote = detnote "dwc:identifiedBy = " $fDetBy "\n" ;
-    else detnote = detnote "dwc:identifiedBy = " DEFDETBY "\n" ;
+    else if (DEFDETBY) detnote = detnote "dwc:identifiedBy = " DEFDETBY "\n" ;
 
     if ($fDetDate) detnote = detnote "dwc:dateIdentified = " $fDetDate ;
     # else if ($fCollDate) detnote = detnote "dwc:dateIdentified " $fCollDate ;
